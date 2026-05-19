@@ -153,6 +153,43 @@ class _AdminHomePageState extends State<AdminHomePage> {
     }
   }
 
+  // ── Approve Grader ───────────────────────────────────────────
+  Future<void> _approveGrader(String docId, String name) async {
+    await _firestore.collection('users').doc(docId).update({'status': 'approved'});
+    _showSnackBar('$name has been approved.');
+  }
+
+  // ── Reject Grader ─────────────────────────────────────────────
+  Future<void> _rejectGrader(String docId, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Reject Account',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        content: Text('Reject $name\'s registration?',
+            style: const TextStyle(fontSize: 14)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel',
+                style: TextStyle(color: Color(0xFF888888))),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Reject',
+                style: TextStyle(
+                    color: Colors.redAccent, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await _firestore.collection('users').doc(docId).update({'status': 'rejected'});
+      _showSnackBar('$name has been rejected.', isError: true);
+    }
+  }
+
   void _showSnackBar(String msg, {bool isError = false}) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
@@ -566,6 +603,16 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           label: 'Total Graders',
                           value: graders.length.toString(),
                           color: const Color(0xFF3498DB)),
+                      _buildStatCard(
+                          icon: Icons.pending_actions_outlined,
+                          label: 'Pending Approval',
+                          value: users
+                              .where((u) =>
+                                  (u.data() as Map<String, dynamic>)['status'] ==
+                                  'pending')
+                              .length
+                              .toString(),
+                          color: const Color(0xFFFFB300)),
                       _buildStatCard(
                           icon: Icons.manage_accounts_outlined,
                           label: 'Admins',
@@ -1014,13 +1061,11 @@ class _AdminHomePageState extends State<AdminHomePage> {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GRADERS TAB (formerly Users Tab — shows only Graders)
+  // GRADERS TAB — with Pending / Approved sections
   // ═══════════════════════════════════════════════════════════════
   Widget _buildGradersTab() {
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore
-          .collection('users')
-          .snapshots(),
+      stream: _firestore.collection('users').snapshots(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(
@@ -1028,9 +1073,23 @@ class _AdminHomePageState extends State<AdminHomePage> {
                   color: Color(0xFF11BD51), strokeWidth: 2.5));
         }
         final docs = snapshot.data?.docs ?? [];
-        final graders = docs
+        final allGraders = docs
             .where((u) =>
                 (u.data() as Map<String, dynamic>)['role'] == 'Grader')
+            .toList();
+
+        final pending = allGraders
+            .where((u) =>
+                (u.data() as Map<String, dynamic>)['status'] == 'pending')
+            .toList();
+        final approved = allGraders
+            .where((u) =>
+                (u.data() as Map<String, dynamic>)['status'] != 'pending' &&
+                (u.data() as Map<String, dynamic>)['status'] != 'rejected')
+            .toList();
+        final rejected = allGraders
+            .where((u) =>
+                (u.data() as Map<String, dynamic>)['status'] == 'rejected')
             .toList();
 
         return SingleChildScrollView(
@@ -1038,8 +1097,68 @@ class _AdminHomePageState extends State<AdminHomePage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (graders.isNotEmpty) ...[
-                _buildSectionHeader('Graders', graders.length),
+              // ── Pending Approvals ───────────────────────────────
+              if (pending.isNotEmpty) ...[
+                Row(
+                  children: [
+                    _buildSectionHeader('Pending Approval', pending.length),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFB300).withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: const Color(0xFFFFB300).withOpacity(0.4)),
+                      ),
+                      child: const Text('Action required',
+                          style: TextStyle(
+                              fontSize: 10,
+                              color: Color(0xFFFFB300),
+                              fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                        color: const Color(0xFFFFB300).withOpacity(0.3)),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2))
+                    ],
+                  ),
+                  child: Column(
+                    children: pending.asMap().entries.map((e) {
+                      final doc = e.value;
+                      final data = doc.data() as Map<String, dynamic>;
+                      return Column(
+                        children: [
+                          if (e.key > 0)
+                            const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                          _buildPendingRow(
+                            name: data['fullName'] ?? '',
+                            email: data['email'] ?? '',
+                            contact: data['contactNumber'] ?? '',
+                            docId: doc.id,
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 28),
+              ],
+
+              // ── Approved Graders ────────────────────────────────
+              if (approved.isNotEmpty) ...[
+                _buildSectionHeader('Approved Graders', approved.length),
                 const SizedBox(height: 8),
                 Container(
                   decoration: BoxDecoration(
@@ -1053,14 +1172,13 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     ],
                   ),
                   child: Column(
-                    children: graders.asMap().entries.map((e) {
+                    children: approved.asMap().entries.map((e) {
                       final doc = e.value;
                       final data = doc.data() as Map<String, dynamic>;
                       return Column(
                         children: [
                           if (e.key > 0)
-                            const Divider(
-                                height: 1, color: Color(0xFFF0F0F0)),
+                            const Divider(height: 1, color: Color(0xFFF0F0F0)),
                           _buildUserRow(
                             name: data['fullName'] ?? '',
                             email: data['email'] ?? '',
@@ -1073,12 +1191,51 @@ class _AdminHomePageState extends State<AdminHomePage> {
                     }).toList(),
                   ),
                 ),
+                const SizedBox(height: 28),
               ],
-              if (graders.isEmpty)
+
+              // ── Rejected Graders ────────────────────────────────
+              if (rejected.isNotEmpty) ...[
+                _buildSectionHeader('Rejected', rejected.length),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                          color: Colors.black.withOpacity(0.04),
+                          blurRadius: 10,
+                          offset: const Offset(0, 2))
+                    ],
+                  ),
+                  child: Column(
+                    children: rejected.asMap().entries.map((e) {
+                      final doc = e.value;
+                      final data = doc.data() as Map<String, dynamic>;
+                      return Column(
+                        children: [
+                          if (e.key > 0)
+                            const Divider(height: 1, color: Color(0xFFF0F0F0)),
+                          _buildUserRow(
+                            name: data['fullName'] ?? '',
+                            email: data['email'] ?? '',
+                            role: 'Rejected',
+                            docId: doc.id,
+                            isCurrentUser: false,
+                          ),
+                        ],
+                      );
+                    }).toList(),
+                  ),
+                ),
+              ],
+
+              if (allGraders.isEmpty)
                 _buildEmptyState(
                     icon: Icons.people_outline,
                     message: 'No graders found',
-                    sub: 'Grader accounts will appear here'),
+                    sub: 'Grader accounts will appear here once registered'),
             ],
           ),
         );
@@ -1086,161 +1243,100 @@ class _AdminHomePageState extends State<AdminHomePage> {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // GRADES TAB
-  // ═══════════════════════════════════════════════════════════════
-
-  void _showGradeDetails(Map<String, dynamic> data) {
-    final grade = (data['grade'] ?? '--').toString().toUpperCase();
-    final ts = data['createdAt'];
-    String dateStr = '--';
-    if (ts != null) {
-      final dt = (ts as dynamic).toDate() as DateTime;
-      dateStr =
-          '${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')}/${dt.year}  ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
-    }
-
-    showDialog(
-      context: context,
-      builder: (_) => Dialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 480),
-          child: Padding(
-            padding: const EdgeInsets.all(28),
+  // ── Pending Row ───────────────────────────────────────────────
+  Widget _buildPendingRow({
+    required String name,
+    required String email,
+    required String contact,
+    required String docId,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 38, height: 38,
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFB300).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(Icons.person_outline,
+                size: 20, color: Color(0xFFFFB300)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _gradeColor(grade),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(grade,
-                          style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white)),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(data['farmerName'] ?? '--',
-                              style: const TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFF1A1A1A))),
-
-                        ],
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => Navigator.pop(context),
-                      child: const Icon(Icons.close,
-                          size: 20, color: Color(0xFF888888)),
-                    ),
-                  ],
-                ),
-
-                const SizedBox(height: 20),
-                const Divider(color: Color(0xFFF0F0F0)),
-                const SizedBox(height: 16),
-
-                // Detail rows
-                _detailRow(Icons.person_outline, 'Farmer Name',
-                    data['farmerName'] ?? '--'),
-                _detailRow(Icons.assignment_ind_outlined, 'Graded By',
-                    data['graderName'] ?? '--'),
-                _detailRow(Icons.badge_outlined, 'Certificate ID',
-                    data['certId'] ?? '--'),
-                _detailRow(Icons.workspace_premium_outlined, 'Grade', grade),
-                _detailRow(Icons.comment_outlined, 'Remark Code',
-                    data['remarkCode'] ?? '--'),
-                _detailRow(Icons.info_outline, 'Remark Details',
-                    data['remarkFull'] ?? '--'),
-                _detailRow(Icons.calendar_today_outlined, 'Date Graded',
-                    dateStr),
-
-                // Show any extra fields from db not explicitly listed
-                ...data.entries
-                    .where((e) => ![
-                          'farmerName',
-                          'farmId',
-                          'graderName',
-                          'graderUid',
-                          'certId',
-                          'grade',
-                          'remarkCode',
-                          'remarkFull',
-                          'createdAt',
-                        ].contains(e.key))
-                    .map((e) => _detailRow(
-                          Icons.data_object_outlined,
-                          e.key,
-                          e.value?.toString() ?? '--',
-                        )),
-
-                const SizedBox(height: 20),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      backgroundColor: const Color(0xFFF4FAF6),
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                    child: const Text('Close',
-                        style: TextStyle(
-                            color: Color(0xFF11BD51),
-                            fontWeight: FontWeight.w600)),
-                  ),
-                ),
+                Text(name,
+                    style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF1A1A1A))),
+                Text(email,
+                    style: const TextStyle(
+                        fontSize: 12, color: Color(0xFF888888))),
+                if (contact.isNotEmpty)
+                  Text(contact,
+                      style: const TextStyle(
+                          fontSize: 11, color: Color(0xFFAAAAAA))),
               ],
             ),
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _detailRow(IconData icon, String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, size: 16, color: const Color(0xFF11BD51)),
-          const SizedBox(width: 10),
-          SizedBox(
-            width: 130,
-            child: Text(label,
-                style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF888888),
-                    fontWeight: FontWeight.w500)),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFB300).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: const Text('Pending',
+                style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFFFB300))),
           ),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFF1A1A1A),
-                    fontWeight: FontWeight.w500)),
+          const SizedBox(width: 10),
+          // Approve button
+          GestureDetector(
+            onTap: () => _approveGrader(docId, name),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFF11BD51),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text('Approve',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white)),
+            ),
+          ),
+          const SizedBox(width: 6),
+          // Reject button
+          GestureDetector(
+            onTap: () => _rejectGrader(docId, name),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFEEEE),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text('Reject',
+                  style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.redAccent)),
+            ),
           ),
         ],
       ),
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // GRADES TAB
+  // ═══════════════════════════════════════════════════════════════
   Widget _buildGradesTab() {
     return StreamBuilder<QuerySnapshot>(
       stream: _firestore
@@ -1330,7 +1426,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
                                 fontSize: 12,
                                 fontWeight: FontWeight.bold,
                                 color: Color(0xFF888888)))),
-                    SizedBox(width: 60),
                   ],
                 ),
               ),
@@ -1415,35 +1510,6 @@ class _AdminHomePageState extends State<AdminHomePage> {
                           SizedBox(
                               width: 60,
                               child: _buildGradeBadge(grade)),
-                          // ── View Details Button ──────────────
-                          SizedBox(
-                            width: 60,
-                            child: GestureDetector(
-                              onTap: () => _showGradeDetails(data),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 5),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE8F8EF),
-                                  borderRadius: BorderRadius.circular(7),
-                                ),
-                                child: const Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(Icons.visibility_outlined,
-                                        size: 13,
-                                        color: Color(0xFF11BD51)),
-                                    SizedBox(width: 3),
-                                    Text('View',
-                                        style: TextStyle(
-                                            fontSize: 11,
-                                            color: Color(0xFF11BD51),
-                                            fontWeight: FontWeight.w600)),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
                         ],
                       ),
                     );

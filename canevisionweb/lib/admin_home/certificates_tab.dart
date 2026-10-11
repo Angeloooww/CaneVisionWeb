@@ -16,6 +16,11 @@ class _CertificatesTabState extends State<CertificatesTab> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
+  final Stream<QuerySnapshot> _stream = FirebaseFirestore.instance
+      .collection('grades')
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -27,10 +32,7 @@ class _CertificatesTabState extends State<CertificatesTab> {
     final pad = AdminLayout.pagePad(context);
 
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance
-          .collection('grades')
-          .orderBy('createdAt', descending: true)
-          .snapshots(),
+      stream: _stream,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const AdminLoader();
@@ -185,8 +187,6 @@ class _CertificatesTabState extends State<CertificatesTab> {
                             itemCount: filtered.length,
                             rowBuilder: (context, i) {
                               final r = filtered[i];
-                              final fileName =
-                                  'certificate_${r.certId.isEmpty ? r.id : r.certId}';
                               return [
                                 txtCell(r.certId.isEmpty ? '-' : r.certId,
                                     size: 12),
@@ -209,8 +209,7 @@ class _CertificatesTabState extends State<CertificatesTab> {
                                       MiniAction(
                                         icon: Icons.print_outlined,
                                         tip: 'Print / Save PDF',
-                                        onTap: () => printDoc(
-                                            context, certificatePdf(r), fileName),
+                                        onTap: () => printCertificate(context, r),
                                       ),
                                       const SizedBox(width: 6),
                                       MiniAction(
@@ -238,99 +237,266 @@ class _CertificatesTabState extends State<CertificatesTab> {
     );
   }
 
-  // ── Certificate (on-screen copy) ──────────────────────────────
+  // ── Certificate of Quality (on-screen copy, matches the PDF) ──
   void _showCertificate(GradeRec r) {
-    Widget field(String label, String value) => Column(
-          children: [
-            Text(value.isEmpty ? '-' : value,
-                style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFF1A1A1A))),
-            const SizedBox(height: 2),
-            Text(label,
-                style: const TextStyle(fontSize: 10, color: Color(0xFF888888))),
-          ],
+    const green = Color(0xFF11BD51);
+    const orange = Color(0xFFE49B0F);
+    const grey = Color(0xFF888888);
+
+    Widget divider() => const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Divider(height: 1, color: Color(0xFFE6E6E6)));
+
+    Widget infoRow(String k, String v) => Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(k, style: const TextStyle(fontSize: 11, color: grey)),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(v.isEmpty ? '-' : v,
+                    textAlign: TextAlign.right,
+                    style: const TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF1A1A1A))),
+              ),
+            ],
+          ),
         );
+
+    Widget heading(String t, {Color color = const Color(0xFF1A1A1A)}) => Text(t,
+        style: TextStyle(
+            fontSize: 12, fontWeight: FontWeight.bold, color: color));
+
+    final trash = r.trashDiscount.isEmpty
+        ? '-'
+        : (r.trashDiscount.contains('%')
+            ? r.trashDiscount
+            : '${r.trashDiscount}%');
+    final now = DateTime.now();
+    String two(int n) => n.toString().padLeft(2, '0');
+    final generated =
+        '${now.month}/${now.day}/${now.year}, ${two(now.hour)}:${two(now.minute)}:${two(now.second)}';
 
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
+          constraints: const BoxConstraints(maxWidth: 520),
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Brand
+                Row(children: [
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                        color: green, borderRadius: BorderRadius.circular(5)),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('CaneVision',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: Color(0xFF1A1A1A))),
+                ]),
+                const SizedBox(height: 16),
+
+                // Title
+                Center(
+                  child: Column(children: [
+                    const Text('Certificate of Quality',
+                        style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Color(0xFF1A1A1A))),
+                    const SizedBox(height: 3),
+                    const Text('Sugarcane Quality Assessment Report',
+                        style: TextStyle(fontSize: 11, color: grey)),
+                    const SizedBox(height: 2),
+                    Text('Certificate ID: ${r.certId.isEmpty ? '-' : r.certId}',
+                        style: const TextStyle(
+                            fontSize: 10, color: Color(0xFFAAAAAA))),
+                  ]),
+                ),
+                divider(),
+
+                // Scanned image
                 Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(24),
-                  decoration: BoxDecoration(
-                    border:
-                        Border.all(color: const Color(0xFF11BD51), width: 3),
-                    borderRadius: BorderRadius.circular(8),
+                  color: const Color(0xFFEAFAF1),
+                  child: Center(
+                    child: SizedBox(
+                      width: 100,
+                      height: 130,
+                      child: r.imageUrl.startsWith('http')
+                          ? Image.network(r.imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Center(
+                                  child: Text('No image',
+                                      style: TextStyle(
+                                          fontSize: 11, color: grey))))
+                          : const Center(
+                              child: Text('No image',
+                                  style:
+                                      TextStyle(fontSize: 11, color: grey))),
+                    ),
                   ),
-                  child: Column(
+                ),
+                const SizedBox(height: 2),
+                const Center(
+                    child: Text('Scanned Sugarcane',
+                        style:
+                            TextStyle(fontSize: 9, color: Color(0xFFAAAAAA)))),
+                divider(),
+
+                // Farmer + grader
+                LayoutBuilder(builder: (context, c) {
+                  final farmer = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('CANEVISION',
-                          style: TextStyle(
-                              fontSize: 12,
-                              letterSpacing: 3,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF11BD51))),
-                      const SizedBox(height: 8),
-                      const Text('Certificate of Sugarcane Grading',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A1A1A))),
-                      const SizedBox(height: 16),
-                      const Text('This certifies that the sugarcane of',
-                          style: TextStyle(
-                              fontSize: 12, color: Color(0xFF888888))),
+                      heading('Farmer Information'),
                       const SizedBox(height: 6),
-                      Text(r.farmerName.isEmpty ? '-' : r.farmerName,
-                          textAlign: TextAlign.center,
+                      infoRow('Name', r.farmerName),
+                      infoRow('Farm ID', r.farmId),
+                      infoRow('Inspection Date', r.longDateStr),
+                    ],
+                  );
+                  final grader = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      heading('Graded By'),
+                      const SizedBox(height: 6),
+                      infoRow('Quality Grader', r.graderName),
+                      infoRow('Email', r.graderEmail),
+                    ],
+                  );
+                  if (c.maxWidth < 420) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [farmer, const SizedBox(height: 12), grader],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: farmer),
+                      const SizedBox(width: 24),
+                      Expanded(child: grader),
+                    ],
+                  );
+                }),
+                divider(),
+
+                // Grade bar
+                Container(
+                  width: double.infinity,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  decoration: BoxDecoration(
+                      color: green, borderRadius: BorderRadius.circular(8)),
+                  child: Row(
+                    children: [
+                      Text(r.grade,
                           style: const TextStyle(
                               fontSize: 22,
                               fontWeight: FontWeight.bold,
-                              color: Color(0xFF1A1A1A))),
-                      Text('Farm ID: ${r.farmId.isEmpty ? '-' : r.farmId}',
+                              color: Colors.white)),
+                      const SizedBox(width: 10),
+                      Text(kGradeLabels[r.grade] ?? '',
                           style: const TextStyle(
-                              fontSize: 12, color: Color(0xFF888888))),
-                      const SizedBox(height: 10),
-                      const Text('has been graded',
-                          style: TextStyle(
-                              fontSize: 12, color: Color(0xFF888888))),
-                      Text(r.grade,
-                          style: TextStyle(
-                              fontSize: 48,
-                              fontWeight: FontWeight.bold,
-                              color: gradeColor(r.grade))),
-                      if (r.remarkCode.isNotEmpty || r.remarkFull.isNotEmpty)
-                        Text(
-                            'Remarks: ${r.remarkCode}${r.remarkFull.isNotEmpty ? ' - ${r.remarkFull}' : ''}',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                                fontSize: 12, color: Color(0xFF555555))),
-                      const SizedBox(height: 20),
-                      Wrap(
-                        alignment: WrapAlignment.spaceEvenly,
-                        spacing: 28,
-                        runSpacing: 12,
-                        children: [
-                          field('Graded by', r.graderName),
-                          field('Date', r.dateStr),
-                          field('Certificate ID', r.certId),
-                        ],
-                      ),
+                              fontSize: 12, color: Colors.white)),
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+
+                // Quality parameters
+                heading('Quality Parameters', color: green),
+                const SizedBox(height: 6),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Trash Discount',
+                              style: TextStyle(fontSize: 10, color: grey)),
+                          const SizedBox(height: 2),
+                          Text(trash,
+                              style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1A1A1A))),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('Remarks',
+                              style: TextStyle(fontSize: 10, color: grey)),
+                          const SizedBox(height: 2),
+                          Text(r.remarkCode.isEmpty ? '-' : r.remarkCode,
+                              style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF1A1A1A))),
+                          if (r.remarkFull.isNotEmpty)
+                            Text(r.remarkFull,
+                                style: const TextStyle(
+                                    fontSize: 10, color: grey)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+
+                // Operational advisory
+                if (r.advisory.isNotEmpty) ...[
+                  divider(),
+                  heading('Operational Advisory', color: orange),
+                  const SizedBox(height: 6),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 10, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFAEB),
+                      border: Border.all(color: orange, width: 0.8),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(r.advisory,
+                        style: const TextStyle(
+                            fontSize: 11, color: Color(0xFF555555))),
+                  ),
+                ],
+
                 const SizedBox(height: 16),
+                Center(
+                  child: Column(children: [
+                    const Text(
+                        'This certificate is digitally generated and verified.',
+                        textAlign: TextAlign.center,
+                        style:
+                            TextStyle(fontSize: 9, color: Color(0xFFAAAAAA))),
+                    Text('Generated on $generated',
+                        style: const TextStyle(
+                            fontSize: 9, color: Color(0xFFAAAAAA))),
+                  ]),
+                ),
+                const SizedBox(height: 16),
+
                 Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
@@ -341,14 +507,11 @@ class _CertificatesTabState extends State<CertificatesTab> {
                     ),
                     const SizedBox(width: 8),
                     ElevatedButton.icon(
-                      onPressed: () => printDoc(
-                          ctx,
-                          certificatePdf(r),
-                          'certificate_${r.certId.isEmpty ? r.id : r.certId}'),
+                      onPressed: () => printCertificate(ctx, r),
                       icon: const Icon(Icons.print_outlined, size: 16),
                       label: const Text('Print / Save PDF'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF11BD51),
+                        backgroundColor: green,
                         foregroundColor: Colors.white,
                         elevation: 0,
                         shape: RoundedRectangleBorder(

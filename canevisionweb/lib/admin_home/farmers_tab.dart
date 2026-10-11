@@ -16,6 +16,11 @@ class _FarmersTabState extends State<FarmersTab> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
+  late final Stream<QuerySnapshot> _stream = _firestore
+      .collection('farmers')
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -68,10 +73,7 @@ class _FarmersTabState extends State<FarmersTab> {
         const SizedBox(height: 16),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore
-                .collection('farmers')
-                .orderBy('createdAt', descending: true)
-                .snapshots(),
+            stream: _stream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const AdminLoader();

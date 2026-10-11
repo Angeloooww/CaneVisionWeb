@@ -8,6 +8,15 @@ import 'package:flutter/material.dart';
 
 const List<String> kGradeOrder = ['FA', 'FB', 'FC', 'FD', 'FE', 'FF'];
 
+const Map<String, String> kGradeLabels = {
+  'FA': 'Excellent',
+  'FB': 'Very Good',
+  'FC': 'Good',
+  'FD': 'Fair',
+  'FE': 'Poor',
+  'FF': 'Very Poor',
+};
+
 Color gradeColor(String grade) {
   switch (grade.toUpperCase()) {
     case 'FA':
@@ -109,8 +118,16 @@ class GradeRec {
   final String remarkFull;
   final String grade;
   final DateTime? date;
+  final String graderEmail;
+  final String trashDiscount;
+  final String imageUrl;
+  final String advisory;
 
   GradeRec({
+    this.graderEmail = '',
+    this.trashDiscount = '',
+    this.imageUrl = '',
+    this.advisory = '',
     required this.id,
     required this.farmerName,
     required this.farmId,
@@ -137,6 +154,15 @@ class GradeRec {
       remarkFull: (m['remarkFull'] ?? '').toString(),
       grade: (m['grade'] ?? '--').toString().toUpperCase(),
       date: ts is Timestamp ? ts.toDate() : null,
+      graderEmail: (m['graderEmail'] ?? '').toString(),
+      trashDiscount: (m['trashDiscount'] ?? m['trash'] ?? '').toString(),
+      imageUrl:
+          (m['imageUrl'] ?? m['photoUrl'] ?? m['imagePath'] ?? '').toString(),
+      advisory: (m['advisory'] ??
+              m['operationalAdvisory'] ??
+              m['recommendation'] ??
+              '')
+          .toString(),
     );
   }
 
@@ -144,6 +170,16 @@ class GradeRec {
     final d = date;
     if (d == null) return '';
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  }
+
+  /// e.g. "October 11, 2026"
+  String get longDateStr {
+    const months = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    final d = date;
+    return d == null ? '-' : '${months[d.month - 1]} ${d.day}, ${d.year}';
   }
 
   String get remarks => '$remarkCode $remarkFull'.trim();

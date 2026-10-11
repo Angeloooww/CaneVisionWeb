@@ -18,6 +18,11 @@ class _GradersTabState extends State<GradersTab> {
   final TextEditingController _searchController = TextEditingController();
   String _query = '';
 
+  late final Stream<QuerySnapshot> _usersStream =
+      _firestore.collection('users').snapshots();
+  late final Stream<QuerySnapshot> _gradesStream =
+      _firestore.collection('grades').snapshots();
+
   @override
   void dispose() {
     _searchController.dispose();
@@ -93,7 +98,7 @@ class _GradersTabState extends State<GradersTab> {
         ),
         Expanded(
           child: StreamBuilder<QuerySnapshot>(
-            stream: _firestore.collection('users').snapshots(),
+            stream: _usersStream,
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const AdminLoader();
@@ -129,7 +134,7 @@ class _GradersTabState extends State<GradersTab> {
                   .toList();
 
               return StreamBuilder<QuerySnapshot>(
-                stream: _firestore.collection('grades').snapshots(),
+                stream: _gradesStream,
                 builder: (context, gSnap) {
                   final recs = (gSnap.data?.docs ?? [])
                       .map((d) => GradeRec.fromDoc(d))

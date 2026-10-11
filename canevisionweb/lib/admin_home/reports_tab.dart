@@ -14,6 +14,15 @@ class ReportsTab extends StatefulWidget {
 class _ReportsTabState extends State<ReportsTab> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
+  late final Stream<QuerySnapshot> _farmersStream =
+      _firestore.collection('farmers').snapshots();
+  late final Stream<QuerySnapshot> _usersStream =
+      _firestore.collection('users').snapshots();
+  late final Stream<QuerySnapshot> _gradesStream = _firestore
+      .collection('grades')
+      .orderBy('createdAt', descending: true)
+      .snapshots();
+
   // 0=Farmers 1=Grading records 2=Grader summary
   int _reportType = 0;
   DateTimeRange? _reportRange;
@@ -126,16 +135,13 @@ class _ReportsTabState extends State<ReportsTab> {
     final pad = AdminLayout.pagePad(context);
 
     return StreamBuilder<QuerySnapshot>(
-      stream: _firestore.collection('farmers').snapshots(),
+      stream: _farmersStream,
       builder: (context, fSnap) {
         return StreamBuilder<QuerySnapshot>(
-          stream: _firestore.collection('users').snapshots(),
+          stream: _usersStream,
           builder: (context, uSnap) {
             return StreamBuilder<QuerySnapshot>(
-              stream: _firestore
-                  .collection('grades')
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
+              stream: _gradesStream,
               builder: (context, gSnap) {
                 if (fSnap.connectionState == ConnectionState.waiting ||
                     uSnap.connectionState == ConnectionState.waiting ||

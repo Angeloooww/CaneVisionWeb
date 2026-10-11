@@ -78,75 +78,267 @@ Future<void> printDoc(
   }
 }
 
-// ── Certificate (PDF) ─────────────────────────────────────────
-pw.Document certificatePdf(GradeRec r) {
+// ── Certificate of Quality (PDF) ──────────────────────────────
+
+const _months = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+];
+
+Future<pw.Document> certificatePdf(GradeRec r) async {
   final doc = pw.Document();
-  pw.Widget line(String label, String value) => pw.Column(children: [
-        pw.Text(value.isEmpty ? '-' : value,
-            style: pw.TextStyle(fontSize: 13, fontWeight: pw.FontWeight.bold)),
-        pw.SizedBox(height: 2),
-        pw.Text(label,
-            style: pw.TextStyle(fontSize: 9, color: PdfColors.grey700)),
-      ]);
+
+  // Scanned sugarcane photo (optional)
+  pw.ImageProvider? photo;
+  if (r.imageUrl.startsWith('http')) {
+    try {
+      photo = await networkImage(r.imageUrl);
+    } catch (_) {
+      photo = null;
+    }
+  }
+
+  final green = PdfColor.fromInt(0xFF11BD51);
+  final orange = PdfColor.fromInt(0xFFE49B0F);
+  final grey = PdfColors.grey600;
+  final lineColor = PdfColors.grey300;
+
+  final d = r.date;
+  final inspection =
+      d == null ? '-' : '${_months[d.month - 1]} ${d.day}, ${d.year}';
+  final now = DateTime.now();
+  String two(int n) => n.toString().padLeft(2, '0');
+  final generated =
+      '${now.month}/${now.day}/${now.year}, ${two(now.hour)}:${two(now.minute)}:${two(now.second)}';
+
+  final trash = r.trashDiscount.isEmpty
+      ? '-'
+      : (r.trashDiscount.contains('%') ? r.trashDiscount : '${r.trashDiscount}%');
+
+  pw.Widget divider() => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(vertical: 12),
+      child: pw.Divider(color: lineColor, thickness: 0.6, height: 0));
+
+  pw.Widget infoRow(String k, String v) => pw.Padding(
+        padding: const pw.EdgeInsets.only(bottom: 4),
+        child: pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text(k, style: pw.TextStyle(fontSize: 8, color: grey)),
+            pw.Flexible(
+              child: pw.Text(v.isEmpty ? '-' : v,
+                  textAlign: pw.TextAlign.right,
+                  style: pw.TextStyle(
+                      fontSize: 8, fontWeight: pw.FontWeight.bold)),
+            ),
+          ],
+        ),
+      );
 
   doc.addPage(pw.Page(
-    pageFormat: PdfPageFormat.a4.landscape,
-    margin: const pw.EdgeInsets.all(24),
-    build: (ctx) => pw.Container(
-      width: double.infinity,
-      height: double.infinity,
-      padding: const pw.EdgeInsets.all(28),
-      decoration: pw.BoxDecoration(
-          border: pw.Border.all(color: PdfColors.green700, width: 4)),
-      child: pw.Column(
-        mainAxisAlignment: pw.MainAxisAlignment.center,
-        children: [
-          pw.Text('CANEVISION',
-              style: pw.TextStyle(
-                  fontSize: 14,
-                  letterSpacing: 3,
-                  color: PdfColors.green800,
-                  fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 10),
-          pw.Text('Certificate of Sugarcane Grading',
+    pageFormat: PdfPageFormat.a4,
+    margin: const pw.EdgeInsets.fromLTRB(36, 40, 36, 36),
+    build: (ctx) => pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        // Brand
+        pw.Row(children: [
+          pw.Container(
+            width: 18,
+            height: 18,
+            decoration: pw.BoxDecoration(
+                color: green, borderRadius: pw.BorderRadius.circular(4)),
+          ),
+          pw.SizedBox(width: 8),
+          pw.Text('CaneVision',
               style:
-                  pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
-          pw.SizedBox(height: 18),
-          pw.Text('This certifies that the sugarcane of',
-              style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
-          pw.SizedBox(height: 8),
-          pw.Text(r.farmerName.isEmpty ? '-' : r.farmerName,
-              style:
-                  pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold)),
-          pw.Text('Farm ID: ${r.farmId.isEmpty ? '-' : r.farmId}',
-              style: pw.TextStyle(fontSize: 11, color: PdfColors.grey700)),
-          pw.SizedBox(height: 12),
-          pw.Text('has been graded',
-              style: pw.TextStyle(fontSize: 12, color: PdfColors.grey700)),
-          pw.SizedBox(height: 6),
-          pw.Text(r.grade,
-              style: pw.TextStyle(
-                  fontSize: 54,
-                  fontWeight: pw.FontWeight.bold,
-                  color: PdfColors.green800)),
-          if (r.remarkCode.isNotEmpty || r.remarkFull.isNotEmpty)
-            pw.Text(
-                'Remarks: ${r.remarkCode}${r.remarkFull.isNotEmpty ? ' - ${r.remarkFull}' : ''}',
-                style: pw.TextStyle(fontSize: 11)),
-          pw.SizedBox(height: 26),
-          pw.Row(
-            mainAxisAlignment: pw.MainAxisAlignment.spaceEvenly,
+                  pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold)),
+        ]),
+        pw.SizedBox(height: 18),
+
+        // Title
+        pw.Center(
+          child: pw.Column(children: [
+            pw.Text('Certificate of Quality',
+                style: pw.TextStyle(
+                    fontSize: 20, fontWeight: pw.FontWeight.bold)),
+            pw.SizedBox(height: 3),
+            pw.Text('Sugarcane Quality Assessment Report',
+                style: pw.TextStyle(fontSize: 8, color: grey)),
+            pw.SizedBox(height: 2),
+            pw.Text('Certificate ID: ${r.certId.isEmpty ? '-' : r.certId}',
+                style: pw.TextStyle(fontSize: 7, color: PdfColors.grey500)),
+          ]),
+        ),
+        divider(),
+
+        // Scanned image
+        pw.Container(
+          width: double.infinity,
+          color: PdfColor.fromInt(0xFFEAFAF1),
+          child: pw.Column(children: [
+            pw.SizedBox(height: 0),
+            pw.SizedBox(
+              width: 100,
+              height: 130,
+              child: photo != null
+                  ? pw.Image(photo, fit: pw.BoxFit.cover)
+                  : pw.Center(
+                      child: pw.Text('No image',
+                          style: pw.TextStyle(fontSize: 8, color: grey))),
+            ),
+          ]),
+        ),
+        pw.SizedBox(height: 2),
+        pw.Center(
+            child: pw.Text('Scanned Sugarcane',
+                style: pw.TextStyle(fontSize: 6, color: PdfColors.grey500))),
+        divider(),
+
+        // Farmer + grader
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Farmer Information',
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 6),
+                  infoRow('Name', r.farmerName),
+                  infoRow('Farm ID', r.farmId),
+                  infoRow('Inspection Date', inspection),
+                ],
+              ),
+            ),
+            pw.SizedBox(width: 24),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Graded By',
+                      style: pw.TextStyle(
+                          fontSize: 9, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 6),
+                  infoRow('Quality Grader', r.graderName),
+                  infoRow('Email', r.graderEmail),
+                ],
+              ),
+            ),
+          ],
+        ),
+        divider(),
+
+        // Grade bar
+        pw.Container(
+          width: double.infinity,
+          padding: const pw.EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: pw.BoxDecoration(
+              color: green, borderRadius: pw.BorderRadius.circular(8)),
+          child: pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
-              line('Graded by', r.graderName),
-              line('Date', r.dateStr),
-              line('Certificate ID', r.certId),
+              pw.Text(r.grade,
+                  style: pw.TextStyle(
+                      fontSize: 20,
+                      fontWeight: pw.FontWeight.bold,
+                      color: PdfColors.white)),
+              pw.SizedBox(width: 10),
+              pw.Text(kGradeLabels[r.grade] ?? '',
+                  style: pw.TextStyle(fontSize: 9, color: PdfColors.white)),
             ],
           ),
+        ),
+        pw.SizedBox(height: 10),
+
+        // Quality parameters
+        pw.Text('Quality Parameters',
+            style: pw.TextStyle(
+                fontSize: 9, fontWeight: pw.FontWeight.bold, color: green)),
+        pw.SizedBox(height: 6),
+        pw.Row(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Trash Discount',
+                      style: pw.TextStyle(fontSize: 7, color: grey)),
+                  pw.SizedBox(height: 2),
+                  pw.Text(trash,
+                      style: pw.TextStyle(
+                          fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                ],
+              ),
+            ),
+            pw.Expanded(
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Remarks',
+                      style: pw.TextStyle(fontSize: 7, color: grey)),
+                  pw.SizedBox(height: 2),
+                  pw.Text(r.remarkCode.isEmpty ? '-' : r.remarkCode,
+                      style: pw.TextStyle(
+                          fontSize: 14, fontWeight: pw.FontWeight.bold)),
+                  if (r.remarkFull.isNotEmpty)
+                    pw.Text(r.remarkFull,
+                        style: pw.TextStyle(fontSize: 7, color: grey)),
+                ],
+              ),
+            ),
+          ],
+        ),
+
+        // Operational advisory
+        if (r.advisory.isNotEmpty) ...[
+          divider(),
+          pw.Text('Operational Advisory',
+              style: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                  color: orange)),
+          pw.SizedBox(height: 6),
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+            decoration: pw.BoxDecoration(
+              color: PdfColor.fromInt(0xFFFFFAEB),
+              border: pw.Border.all(color: orange, width: 0.6),
+              borderRadius: pw.BorderRadius.circular(5),
+            ),
+            child: pw.Text(r.advisory, style: pw.TextStyle(fontSize: 7)),
+          ),
         ],
-      ),
+
+        pw.SizedBox(height: 18),
+        pw.Center(
+          child: pw.Column(children: [
+            pw.Text('This certificate is digitally generated and verified.',
+                style: pw.TextStyle(fontSize: 6, color: PdfColors.grey500)),
+            pw.Text('Generated on $generated',
+                style: pw.TextStyle(fontSize: 6, color: PdfColors.grey500)),
+          ]),
+        ),
+      ],
     ),
   ));
   return doc;
+}
+
+Future<void> printCertificate(BuildContext context, GradeRec r) async {
+  try {
+    final doc = await certificatePdf(r);
+    if (!context.mounted) return;
+    await printDoc(context, doc,
+        'certificate_${r.certId.isEmpty ? r.id : r.certId}');
+  } catch (e) {
+    showAdminSnackBar(context, 'Could not build the certificate: $e',
+        isError: true);
+  }
 }
 
 // ── Per-farmer printable report ───────────────────────────────

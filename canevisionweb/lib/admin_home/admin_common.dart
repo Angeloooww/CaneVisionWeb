@@ -8,6 +8,35 @@ import 'package:flutter/material.dart';
 
 const List<String> kGradeOrder = ['FA', 'FB', 'FC', 'FD', 'FE', 'FF'];
 
+/// Rank of each grade (FA = best = 1 ... FF = worst = 6).
+const Map<String, int> kGradeRank = {
+  'FA': 1,
+  'FB': 2,
+  'FC': 3,
+  'FD': 4,
+  'FE': 5,
+  'FF': 6,
+};
+
+/// Mean rank (1.0 - 6.0) of the given grade strings, or null if none
+/// are valid. Used by BOTH the dashboard "Avg Grade" card and the
+/// Monthly Grade Breakdown chart so they always agree.
+double? averageGradeRank(Iterable<String> grades) {
+  int sum = 0, n = 0;
+  for (final g in grades) {
+    final r = kGradeRank[g.toUpperCase()];
+    if (r != null) {
+      sum += r;
+      n++;
+    }
+  }
+  return n == 0 ? null : sum / n;
+}
+
+/// Converts a mean rank into a letter grade ('--' if null).
+String rankToGrade(double? rank) =>
+    rank == null ? '--' : kGradeOrder[rank.round().clamp(1, 6).toInt() - 1];
+
 const Map<String, String> kGradeLabels = {
   'FA': 'Excellent',
   'FB': 'Very Good',

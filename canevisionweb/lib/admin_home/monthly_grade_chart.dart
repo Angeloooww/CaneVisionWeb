@@ -74,15 +74,13 @@ class _MonthlyGradeChartState extends State<MonthlyGradeChart> {
 
           final total = counts.fold(0, (a, b) => a + b);
 
-          // True average: sum of ranks (FA=1 ... FF=6) / number of records
-          int rankSum = 0;
-          for (int i = 0; i < 6; i++) {
-            rankSum += counts[i] * (i + 1);
-          }
-          final double? avg = total == 0 ? null : rankSum / total;
-          final avgGrade = avg == null
-              ? '--'
-              : kGradeOrder[avg.round().clamp(1, 6).toInt() - 1];
+          // Average uses the same shared helpers as the dashboard
+          // "Avg Grade" card, so the two always agree.
+          final double? avg = averageGradeRank([
+            for (int i = 0; i < 6; i++)
+              for (int k = 0; k < counts[i]; k++) kGradeOrder[i],
+          ]);
+          final avgGrade = rankToGrade(avg);
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,

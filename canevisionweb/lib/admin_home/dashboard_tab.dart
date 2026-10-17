@@ -13,6 +13,7 @@ class DashboardTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final firestore = FirebaseFirestore.instance;
+    final now = DateTime.now();
 
     return StreamBuilder<QuerySnapshot>(
       stream: firestore.collection('farmers').snapshots(),
@@ -20,116 +21,135 @@ class DashboardTab extends StatelessWidget {
         return StreamBuilder<QuerySnapshot>(
           stream: firestore.collection('users').snapshots(),
           builder: (context, usersSnap) {
-            final farmers = farmersSnap.hasData
-                ? farmersSnap.data!.docs
-                : <QueryDocumentSnapshot>[];
-            final users = usersSnap.hasData
-                ? usersSnap.data!.docs
-                : <QueryDocumentSnapshot>[];
+            return StreamBuilder<QuerySnapshot>(
+              // Same query the Monthly Grade Breakdown chart uses for the
+              // current month, so the card and the chart always agree.
+              stream: firestore
+                  .collection('grades')
+                  .where('createdAt',
+                      isGreaterThanOrEqualTo:
+                          Timestamp.fromDate(DateTime(now.year, now.month)),
+                      isLessThan:
+                          Timestamp.fromDate(DateTime(now.year, now.month + 1)))
+                  .snapshots(),
+              builder: (context, gradesSnap) {
+                final farmers = farmersSnap.hasData
+                    ? farmersSnap.data!.docs
+                    : <QueryDocumentSnapshot>[];
+                final users = usersSnap.hasData
+                    ? usersSnap.data!.docs
+                    : <QueryDocumentSnapshot>[];
+                final gradeDocs = gradesSnap.hasData
+                    ? gradesSnap.data!.docs
+                    : <QueryDocumentSnapshot>[];
 
-            final graders = users
-                .where((u) =>
-                    (u.data() as Map<String, dynamic>)['role'] == 'Grader')
-                .toList();
-            final admins = users
-                .where((u) =>
-                    (u.data() as Map<String, dynamic>)['role'] == 'Admin')
-                .toList();
-            final pendingCount = users
-                .where((u) =>
-                    (u.data() as Map<String, dynamic>)['status'] == 'pending')
-                .length;
+                final graders = users
+                    .where((u) =>
+                        (u.data() as Map<String, dynamic>)['role'] == 'Grader')
+                    .toList();
+                final admins = users
+                    .where((u) =>
+                        (u.data() as Map<String, dynamic>)['role'] == 'Admin')
+                    .toList();
+                final pendingCount = users
+                    .where((u) =>
+                        (u.data() as Map<String, dynamic>)['status'] ==
+                        'pending')
+                    .length;
 
-            final avgGrade = _averageGrade(farmers);
-            final pad = AdminLayout.pagePad(context);
+                final avgGrade = _averageGrade(gradeDocs);
+                final pad = AdminLayout.pagePad(context);
 
-            return SingleChildScrollView(
-              padding: EdgeInsets.all(pad),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Overview',
-                      style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF1A1A1A))),
-                  const SizedBox(height: 4),
-                  const Text('System-wide statistics at a glance',
-                      style:
-                          TextStyle(fontSize: 12, color: Color(0xFF888888))),
-                  const SizedBox(height: 20),
+                return SingleChildScrollView(
+                  padding: EdgeInsets.all(pad),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Overview',
+                          style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF1A1A1A))),
+                      const SizedBox(height: 4),
+                      const Text('System-wide statistics at a glance',
+                          style: TextStyle(
+                              fontSize: 12, color: Color(0xFF888888))),
+                      const SizedBox(height: 20),
 
-                  // ── Stats grid (equal-width cards that fill the row) ──
-                  LayoutBuilder(builder: (context, c) {
-                    const spacing = 16.0;
-                    final cols = c.maxWidth >= 900
-                        ? 5
-                        : c.maxWidth >= 560
-                            ? 3
-                            : 2;
-                    final w =
-                        ((c.maxWidth - spacing * (cols - 1)) / cols)
+                      // ── Stats grid (equal-width cards that fill the row) ──
+                      LayoutBuilder(builder: (context, c) {
+                        const spacing = 16.0;
+                        final cols = c.maxWidth >= 900
+                            ? 5
+                            : c.maxWidth >= 560
+                                ? 3
+                                : 2;
+                        final w = ((c.maxWidth - spacing * (cols - 1)) / cols)
                             .floorToDouble();
-                    final cards = [
-                      StatCard(
-                          icon: Icons.grass_outlined,
-                          label: 'Total Farmers',
-                          value: farmers.length.toString(),
-                          color: const Color(0xFF11BD51)),
-                      StatCard(
-                          icon: Icons.assignment_outlined,
-                          label: 'Total Graders',
-                          value: graders.length.toString(),
-                          color: const Color(0xFF3498DB)),
-                      StatCard(
-                          icon: Icons.pending_actions_outlined,
-                          label: 'Pending Approval',
-                          value: pendingCount.toString(),
-                          color: const Color(0xFFFFB300)),
-                      StatCard(
-                          icon: Icons.manage_accounts_outlined,
-                          label: 'Admins',
-                          value: admins.length.toString(),
-                          color: const Color(0xFF9B59B6)),
-                      StatCard(
-                          icon: Icons.grading_outlined,
-                          label: 'Avg Grade',
-                          value: avgGrade,
-                          color: gradeColor(avgGrade)),
-                    ];
-                    return Wrap(
-                      spacing: spacing,
-                      runSpacing: spacing,
-                      children:
-                          cards.map((c) => SizedBox(width: w, child: c)).toList(),
-                    );
-                  }),
+                        final cards = [
+                          StatCard(
+                              icon: Icons.grass_outlined,
+                              label: 'Total Farmers',
+                              value: farmers.length.toString(),
+                              color: const Color(0xFF11BD51)),
+                          StatCard(
+                              icon: Icons.assignment_outlined,
+                              label: 'Total Graders',
+                              value: graders.length.toString(),
+                              color: const Color(0xFF3498DB)),
+                          StatCard(
+                              icon: Icons.pending_actions_outlined,
+                              label: 'Pending Approval',
+                              value: pendingCount.toString(),
+                              color: const Color(0xFFFFB300)),
+                          StatCard(
+                              icon: Icons.manage_accounts_outlined,
+                              label: 'Admins',
+                              value: admins.length.toString(),
+                              color: const Color(0xFF9B59B6)),
+                          StatCard(
+                              icon: Icons.grading_outlined,
+                              label: 'Avg Grade (This Month)',
+                              value: avgGrade,
+                              color: gradeColor(avgGrade)),
+                        ];
+                        return Wrap(
+                          spacing: spacing,
+                          runSpacing: spacing,
+                          children: cards
+                              .map((c) => SizedBox(width: w, child: c))
+                              .toList(),
+                        );
+                      }),
 
-                  const SizedBox(height: 32),
+                      const SizedBox(height: 32),
 
-                  // ── Chart + Recent farmers (stacks on narrow screens) ──
-                  LayoutBuilder(builder: (context, c) {
-                    final recent = _buildRecentFarmers(farmers);
-                    if (c.maxWidth >= 900) {
-                      return Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Expanded(flex: 3, child: MonthlyGradeChart()),
-                          const SizedBox(width: 16),
-                          Expanded(flex: 2, child: recent),
-                        ],
-                      );
-                    }
-                    return Column(
-                      children: [
-                        const MonthlyGradeChart(),
-                        const SizedBox(height: 16),
-                        recent,
-                      ],
-                    );
-                  }),
-                ],
-              ),
+                      // ── Chart + Recent farmers (stacks on narrow screens) ──
+                      LayoutBuilder(builder: (context, c) {
+                        final recent = _buildRecentFarmers(farmers);
+                        if (c.maxWidth >= 900) {
+                          return Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Expanded(
+                                  flex: 3, child: MonthlyGradeChart()),
+                              const SizedBox(width: 16),
+                              Expanded(flex: 2, child: recent),
+                            ],
+                          );
+                        }
+                        return Column(
+                          children: [
+                            const MonthlyGradeChart(),
+                            const SizedBox(height: 16),
+                            recent,
+                          ],
+                        );
+                      }),
+                    ],
+                  ),
+                );
+              },
             );
           },
         );
@@ -137,25 +157,15 @@ class DashboardTab extends StatelessWidget {
     );
   }
 
-  String _averageGrade(List<QueryDocumentSnapshot> farmers) {
-    const gradeRank = {
-      'FA': 1, 'FB': 2, 'FC': 3,
-      'FD': 4, 'FE': 5, 'FF': 6,
-    };
-    final graded = farmers.where((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      return gradeRank
-          .containsKey((data['grade'] ?? '').toString().toUpperCase());
-    }).toList();
-    if (graded.isEmpty) return '--';
-
-    final total = graded.fold<int>(0, (sum, doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      final g = (data['grade'] ?? '').toString().toUpperCase();
-      return sum + (gradeRank[g] ?? 0);
-    });
-    final avg = (total / graded.length).round().clamp(1, 6);
-    return kGradeOrder[avg - 1];
+  /// Average grade of this month's records in the `grades` collection.
+  /// Skips the same invalid records (bad grade / missing createdAt) that
+  /// the Monthly Grade Breakdown chart skips.
+  String _averageGrade(List<QueryDocumentSnapshot> gradeDocs) {
+    final grades = gradeDocs
+        .map((d) => d.data() as Map<String, dynamic>)
+        .where((data) => data['createdAt'] is Timestamp)
+        .map((data) => (data['grade'] ?? '').toString());
+    return rankToGrade(averageGradeRank(grades));
   }
 
   Widget _buildRecentFarmers(List<QueryDocumentSnapshot> farmers) {

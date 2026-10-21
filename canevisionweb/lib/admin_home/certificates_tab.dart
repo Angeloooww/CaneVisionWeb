@@ -182,7 +182,7 @@ class _CertificatesTabState extends State<CertificatesTab> {
                               hdrCell('Graded By'),
                               hdrCell('Date'),
                               hdrFixed('Grade', 60),
-                              const SizedBox(width: 100),
+                              const SizedBox(width: 134),
                             ],
                             itemCount: filtered.length,
                             rowBuilder: (context, i) {
@@ -196,7 +196,7 @@ class _CertificatesTabState extends State<CertificatesTab> {
                                 txtCell(r.dateStr),
                                 gradeCell(r.grade),
                                 SizedBox(
-                                  width: 100,
+                                  width: 134,
                                   child: Row(
                                     mainAxisAlignment: MainAxisAlignment.end,
                                     children: [
@@ -207,8 +207,15 @@ class _CertificatesTabState extends State<CertificatesTab> {
                                       ),
                                       const SizedBox(width: 6),
                                       MiniAction(
+                                        icon: Icons.download_outlined,
+                                        tip: 'Download PDF',
+                                        onTap: () =>
+                                            downloadCertificate(context, r),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      MiniAction(
                                         icon: Icons.print_outlined,
-                                        tip: 'Print / Save PDF',
+                                        tip: 'Print',
                                         onTap: () => printCertificate(context, r),
                                       ),
                                       const SizedBox(width: 6),
@@ -327,35 +334,6 @@ class _CertificatesTabState extends State<CertificatesTab> {
                             fontSize: 10, color: Color(0xFFAAAAAA))),
                   ]),
                 ),
-                divider(),
-
-                // Scanned image
-                Container(
-                  width: double.infinity,
-                  color: const Color(0xFFEAFAF1),
-                  child: Center(
-                    child: SizedBox(
-                      width: 100,
-                      height: 130,
-                      child: r.imageUrl.startsWith('http')
-                          ? Image.network(r.imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const Center(
-                                  child: Text('No image',
-                                      style: TextStyle(
-                                          fontSize: 11, color: grey))))
-                          : const Center(
-                              child: Text('No image',
-                                  style:
-                                      TextStyle(fontSize: 11, color: grey))),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 2),
-                const Center(
-                    child: Text('Scanned Sugarcane',
-                        style:
-                            TextStyle(fontSize: 9, color: Color(0xFFAAAAAA)))),
                 divider(),
 
                 // Farmer + grader
@@ -497,19 +475,32 @@ class _CertificatesTabState extends State<CertificatesTab> {
                 ),
                 const SizedBox(height: 16),
 
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
                       child: const Text('Close',
                           style: TextStyle(color: Color(0xFF888888))),
                     ),
-                    const SizedBox(width: 8),
+                    OutlinedButton.icon(
+                      onPressed: () => downloadCertificate(ctx, r),
+                      icon: const Icon(Icons.download_outlined, size: 16),
+                      label: const Text('Download PDF'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: green,
+                        side: const BorderSide(color: green),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
                     ElevatedButton.icon(
                       onPressed: () => printCertificate(ctx, r),
                       icon: const Icon(Icons.print_outlined, size: 16),
-                      label: const Text('Print / Save PDF'),
+                      label: const Text('Print'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: green,
                         foregroundColor: Colors.white,

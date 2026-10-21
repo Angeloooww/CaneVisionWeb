@@ -1,4 +1,8 @@
+import 'dart:io' show File, Platform;
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
@@ -88,16 +92,6 @@ const _months = [
 Future<pw.Document> certificatePdf(GradeRec r) async {
   final doc = pw.Document();
 
-  // Scanned sugarcane photo (optional)
-  pw.ImageProvider? photo;
-  if (r.imageUrl.startsWith('http')) {
-    try {
-      photo = await networkImage(r.imageUrl);
-    } catch (_) {
-      photo = null;
-    }
-  }
-
   final green = PdfColor.fromInt(0xFF11BD51);
   final orange = PdfColor.fromInt(0xFFE49B0F);
   final grey = PdfColors.grey600;
@@ -170,29 +164,6 @@ Future<pw.Document> certificatePdf(GradeRec r) async {
                 style: pw.TextStyle(fontSize: 7, color: PdfColors.grey500)),
           ]),
         ),
-        divider(),
-
-        // Scanned image
-        pw.Container(
-          width: double.infinity,
-          color: PdfColor.fromInt(0xFFEAFAF1),
-          child: pw.Column(children: [
-            pw.SizedBox(height: 0),
-            pw.SizedBox(
-              width: 100,
-              height: 130,
-              child: photo != null
-                  ? pw.Image(photo, fit: pw.BoxFit.cover)
-                  : pw.Center(
-                      child: pw.Text('No image',
-                          style: pw.TextStyle(fontSize: 8, color: grey))),
-            ),
-          ]),
-        ),
-        pw.SizedBox(height: 2),
-        pw.Center(
-            child: pw.Text('Scanned Sugarcane',
-                style: pw.TextStyle(fontSize: 6, color: PdfColors.grey500))),
         divider(),
 
         // Farmer + grader
@@ -337,6 +308,59 @@ Future<void> printCertificate(BuildContext context, GradeRec r) async {
         'certificate_${r.certId.isEmpty ? r.id : r.certId}');
   } catch (e) {
     showAdminSnackBar(context, 'Could not build the certificate: $e',
+        isError: true);
+  }
+}
+
+/// Saves any PDF document to a file.
+/// Web: normal browser download. Desktop/mobile: "Save as" dialog.
+Future<void> downloadDoc(
+    BuildContext context, pw.Document doc, String baseName) async {
+  try {
+    final bytes = await doc.save();
+    final fileName = '$baseName.pdf';
+
+    if (kIsWeb) {
+      // Browsers choose the download folder themselves (enable
+      // "Ask where to save each file" in the browser settings).
+      await Printing.sharePdf(bytes: bytes, filename: fileName);
+      return;
+    }
+
+    final dynamic saved = await FilePicker.saveFile(
+      dialogTitle: 'Save PDF',
+      fileName: fileName,
+      type: FileType.custom,
+      allowedExtensions: ['pdf'],
+      bytes: bytes, // required on Android / iOS
+    );
+    if (saved == null) return; // user cancelled
+    // Newer file_picker versions return a Uri, older ones a String path.
+    final String path = saved is Uri ? saved.toFilePath() : saved.toString();
+
+    // Windows / macOS / Linux return the chosen path but don't write the file.
+    if (Platform.isWindows || Platform.isMacOS || Platform.isLinux) {
+      await File(path).writeAsBytes(bytes);
+    }
+    if (!context.mounted) return;
+    showAdminSnackBar(context, 'PDF saved.');
+  } catch (e) {
+    if (!context.mounted) return;
+    showAdminSnackBar(context, 'Could not download the PDF: $e',
+        isError: true);
+  }
+}
+
+/// Downloads the certificate as a PDF file directly (no print dialog).
+Future<void> downloadCertificate(BuildContext context, GradeRec r) async {
+  try {
+    final doc = await certificatePdf(r);
+    if (!context.mounted) return;
+    await downloadDoc(
+        context, doc, 'certificate_${r.certId.isEmpty ? r.id : r.certId}');
+  } catch (e) {
+    if (!context.mounted) return;
+    showAdminSnackBar(context, 'Could not download the certificate: $e',
         isError: true);
   }
 }

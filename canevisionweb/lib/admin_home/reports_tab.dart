@@ -157,6 +157,14 @@ class _ReportsTabState extends State<ReportsTab> {
                 final subtitle = usesRange
                     ? 'Generated ${todayString()}  |  Period: ${_rangeLabel()}  |  ${data.rows.length} row(s)'
                     : 'Generated ${todayString()}  |  ${data.rows.length} row(s)';
+                final fileBase = data.title.toLowerCase().replaceAll(' ', '_');
+
+                buildDoc() => buildPdfTable(
+                      title: data.title,
+                      subtitle: subtitle,
+                      headers: data.headers,
+                      rows: data.rows,
+                    );
 
                 return Padding(
                   padding: EdgeInsets.all(pad),
@@ -170,7 +178,7 @@ class _ReportsTabState extends State<ReportsTab> {
                               color: Color(0xFF1A1A1A))),
                       const SizedBox(height: 4),
                       const Text(
-                          'Choose a report, preview the table, then print it or save it as PDF.',
+                          'Choose a report, preview the table, then download it as a PDF or print it.',
                           style: TextStyle(
                               fontSize: 12, color: Color(0xFF888888))),
                       const SizedBox(height: 16),
@@ -213,23 +221,30 @@ class _ReportsTabState extends State<ReportsTab> {
                                   setState(() => _reportRange = null),
                               child: const Text('Clear dates'),
                             ),
+                          // Download as a PDF file
                           ElevatedButton.icon(
-                            onPressed: () => printDoc(
-                              context,
-                              buildPdfTable(
-                                title: data.title,
-                                subtitle: subtitle,
-                                headers: data.headers,
-                                rows: data.rows,
-                              ),
-                              data.title.toLowerCase().replaceAll(' ', '_'),
-                            ),
-                            icon: const Icon(Icons.print_outlined, size: 16),
-                            label: const Text('Print / Save PDF'),
+                            onPressed: () =>
+                                downloadDoc(context, buildDoc(), fileBase),
+                            icon:
+                                const Icon(Icons.download_outlined, size: 16),
+                            label: const Text('Download PDF'),
                             style: ElevatedButton.styleFrom(
                               backgroundColor: const Color(0xFF11BD51),
                               foregroundColor: Colors.white,
                               elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10)),
+                            ),
+                          ),
+                          // Open the print dialog
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                printDoc(context, buildDoc(), fileBase),
+                            icon: const Icon(Icons.print_outlined, size: 16),
+                            label: const Text('Print'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF11BD51),
+                              side: const BorderSide(color: Color(0xFF11BD51)),
                               shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10)),
                             ),

@@ -586,6 +586,36 @@ class _GradersTabState extends State<GradersTab> {
     final counts = gradeBreakdown(mine);
     final screenH = MediaQuery.of(context).size.height;
 
+    // Same PDF is used by both the Download and Print buttons.
+    buildDoc() => buildPdfTable(
+          title: 'Grader Record - $name',
+          subtitle:
+              'Generated ${todayString()}  |  Total graded: ${mine.length}  |  ${kGradeOrder.map((g) => '$g: ${counts[g]}').join('  ')}',
+          headers: const [
+            '#',
+            'Date',
+            'Farmer',
+            'Farm ID',
+            'Cert ID',
+            'Remarks',
+            'Grade'
+          ],
+          rows: [
+            for (int i = 0; i < mine.length; i++)
+              [
+                '${i + 1}',
+                mine[i].dateStr,
+                mine[i].farmerName,
+                mine[i].farmId,
+                mine[i].certId,
+                mine[i].remarks,
+                mine[i].grade,
+              ]
+          ],
+        );
+    final fileBase =
+        'grader_record_${name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_')}';
+
     showDialog(
       context: context,
       builder: (ctx) => Dialog(
@@ -676,54 +706,42 @@ class _GradersTabState extends State<GradersTab> {
                         ),
                 ),
                 const SizedBox(height: 14),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
+                Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
                       child: const Text('Close',
                           style: TextStyle(color: Color(0xFF888888))),
                     ),
-                    const SizedBox(width: 8),
+                    // Download as a PDF file
                     ElevatedButton.icon(
                       onPressed: mine.isEmpty
                           ? null
-                          : () => printDoc(
-                                ctx,
-                                buildPdfTable(
-                                  title: 'Grader Record - $name',
-                                  subtitle:
-                                      'Generated ${todayString()}  |  Total graded: ${mine.length}  |  ${kGradeOrder.map((g) => '$g: ${counts[g]}').join('  ')}',
-                                  headers: const [
-                                    '#',
-                                    'Date',
-                                    'Farmer',
-                                    'Farm ID',
-                                    'Cert ID',
-                                    'Remarks',
-                                    'Grade'
-                                  ],
-                                  rows: [
-                                    for (int i = 0; i < mine.length; i++)
-                                      [
-                                        '${i + 1}',
-                                        mine[i].dateStr,
-                                        mine[i].farmerName,
-                                        mine[i].farmId,
-                                        mine[i].certId,
-                                        mine[i].remarks,
-                                        mine[i].grade,
-                                      ]
-                                  ],
-                                ),
-                                'grader_record_$name',
-                              ),
-                      icon: const Icon(Icons.print_outlined, size: 16),
-                      label: const Text('Print Record'),
+                          : () => downloadDoc(ctx, buildDoc(), fileBase),
+                      icon: const Icon(Icons.download_outlined, size: 16),
+                      label: const Text('Download PDF'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF11BD51),
                         foregroundColor: Colors.white,
                         elevation: 0,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                    // Open the print dialog
+                    OutlinedButton.icon(
+                      onPressed: mine.isEmpty
+                          ? null
+                          : () => printDoc(ctx, buildDoc(), fileBase),
+                      icon: const Icon(Icons.print_outlined, size: 16),
+                      label: const Text('Print'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF11BD51),
+                        side: const BorderSide(color: Color(0xFF11BD51)),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10)),
                       ),
